@@ -27,13 +27,9 @@ pretty_uncert <- function(x, dx){
   x_str <- sprintf(f_string, round(x*10^pos)/10^pos)
 
   return(paste0(x_str, " ± ", u_str))
-
-
 }
 
-slope_func <- function(L, d_L, D, d_D, sep, d_sep){
-  if(L ==0.0 | d_L == 0.0 | D == 0.0 | d_D == 0.0 | sep == 0.0 | d_sep == 0.0)
-    return(c(Inf,Inf,Inf,Inf))
+pred_slope <- function(L, d_L, D, d_D, sep, d_sep){
 
   v <- L^2/(4.0*sep)+L*D/(2.0*sep)
 
@@ -43,7 +39,13 @@ slope_func <- function(L, d_L, D, d_D, sep, d_sep){
 
   u <- sqrt(u_L_sq + u_D_sq + u_sep_sq)
 
-  out <- c(pretty_uncert(v,u), v-u, v+u)
+  if (is.finite(v) && is.finite(u)){
+    out <- list(pretty_uncert(v,u), v-u, v+u)
+  }
+
+  else{
+    out <- list(Inf,Inf, Inf)
+  }
   return(out)
 }
 
@@ -52,47 +54,49 @@ make_model <- function(data){
   V_sq <- data$Vratio^2
   data <- cbind(data, V_sq)
 
-
   qmodel <- lm(y~Vratio+V_sq, data=data)
   # Is quadratic term significant?
   quad_p <- summary(qmodel)$coefficients[3,4]
+  quad_p_pos <- -floor(log10(quad_p))+1
+  quad_p_nice <- round(quad_p*10^quad_p_pos)/10^quad_p_pos
+
   if (quad_p < 0.05){
     # Is intercept significant?
     int_p <- summary(qmodel)$coefficients[1,4]
     if(int_p < 0.05){
-      string1 <- "The model is quadratic with a significant intercept."
-
       quad_val <- summary(qmodel)$coefficients[3,1]
       quad_u <- summary(qmodel)$coefficients[3,2]
+
       int_val <- summary(qmodel)$coefficients[1,1]
       int_u <- summary(qmodel)$coefficients[1,2]
+
       slope_val <- summary(qmodel)$coefficients[2,1]
       slope_u <- summary(qmodel)$coefficients[2,2]
 
-      quad_p_pos <- -floor(log10(quad_p))+1
-      quad_p_nice <- round(quad_p*10^quad_p_pos)/10^quad_p_pos
+
 
       int_p_pos <- -floor(log10(int_p)) + 1
       int_p_nice <- round(int_p*10^int_p_pos)/10^int_p_pos
 
       r_sq <- round(summary(qmodel)$adj.r.squared,4)
-
+      string1 <- "The model is quadratic with a significant intercept."
       string2 <- paste0("Quadratic term: p = ", quad_p_nice, " < 0.05 (significant).  Value = ", pretty_uncert(quad_val, quad_u), " cm.")
       string3 <- paste0("Linear term: value = ", pretty_uncert(slope_val,slope_u), " cm.")
       string4 <- paste0("Intercept: p = ", int_p_nice, " < 0.05 (significant).  Value = ", pretty_uncert(int_val, int_u), "cm.")
       string5 <- paste0("Adjusted R^2: ", r_sq)
 
       strings <- paste(string1, string2, string3, string4, string5, sep="\n")
-      return(c("quad1",strings))
+      return(list("quad1",strings))
     }
     else{
       # Quadratic, but no intercept.  Redo regression with intercept = 0.  *** This may change significance of quadratic term
       # Only return if quadratic term is still significant.
       qmodel <- lm(y~0+Vratio+V_sq, data=data)
       quad_p <- summary(qmodel)$coefficients[2,4]
-      if (quad_p < 0.05){
-        string1 <- "The model is quadratic with zero intercept."
+      quad_p_pos <- -floor(log10(quad_p))+1
+      quad_p_nice <- round(quad_p*10^quad_p_pos)/10^quad_p_pos
 
+      if (quad_p < 0.05){
         quad_val <- summary(qmodel)$coefficients[2,1]
         quad_u <- summary(qmodel)$coefficients[2,2]
 
@@ -103,9 +107,7 @@ make_model <- function(data){
         quad_p_pos <- -floor(log10(quad_p))+1
         quad_p_nice <- round(quad_p*10^quad_p_pos)/10^quad_p_pos
 
-        int_p_pos <- -floor(log10(int_p)) + 1
-        int_p_nice <- round(int_p*10^int_p_pos)/10^int_p_pos
-
+        string1 <- "The model is quadratic with zero intercept."
         string2 <- paste0("Quadratic term: p = ", quad_p_nice, " < 0.05 (significant).  Value = ", pretty_uncert(quad_val, quad_u), " cm.")
         string3 <- paste0("Linear term: value = ", pretty_uncert(slope_val, slope_u), " cm.")
         string4 <- paste0("Intercept: p = ", int_p_nice, " > 0.05 (not significant).")
@@ -113,7 +115,7 @@ make_model <- function(data){
 
         strings <- paste(string1, string2, string3, string4, string5, sep="\n")
 
-        return(c('quad0', strings))
+        return(list('quad0', strings))
       }
     # If we've reached here, it should be a linear fit.
     }
@@ -123,48 +125,51 @@ make_model <- function(data){
   # Check if intercept is significant
   p_int <- summary(lmodel)$coefficients[1,4]
   if (p_int < 0.05){
-    string1 <- "The model is linear with a non-zero intercept."
+
     constant_raw <- summary(lmodel)$coefficients[1,1]
     constant_u <- summary(lmodel)$coefficients[1,2]
     p_val <- summary(lmodel)$coefficients[1,4]
     pos <- -floor(log10(p_val)) + 1
     p_val <- round(p_val*10^pos)/10^pos
-    string2 <- paste0("Intercept: p = ",p_val," < 0.05 (significant), value=",pretty_uncert(constant_raw, constant_u), " cm.")
-
     ratio_raw <- summary(lmodel)$coefficients[2,1]
     ratio_u <- summary(lmodel)$coefficients[2,2]
     r_sq <- round(summary(lmodel)$adj.r.squared,4)
+    string1 <- "The model is linear with a non-zero intercept."
+    string2 <- paste0("Quadratic term: p = ", quad_p_nice," > 0.05 (not significant)")
     string3 <- paste0("Slope: ", pretty_uncert(ratio_raw,ratio_u), " cm.")
-    string4 <- paste0("Adjusted R^2: ", r_sq)
+    string4 <- paste0("Intercept: p = ",p_val," < 0.05 (significant), value=",pretty_uncert(constant_raw, constant_u), " cm.")
+    string5 <- paste0("Adjusted R^2: ", r_sq)
 
-    strings <- paste (string1, string2, string3, string4, sep="\n")
+    strings <- paste (string1, string2, string3, string4, string5, sep="\n")
 
-    return(c('lin1',strings))
+    return(list('lin1',strings))
   }
 
   else{
-    string1 <- "The model is linear with no significant intercept."
-
     p_val <- summary(lmodel)$coefficients[1,4]
     pos <- -floor(log10(p_val)) + 1
     p_val <- round(p_val*10^pos)/10^pos
 
-    string2 <- paste0("Intercept: p = ",p_val," ≥ 0.05 (not significant).")
+
 
     # Now redo the regression w/o intercept
     lmodel <- lm(y~0+Vratio, data=data)
     ratio_raw <- summary(lmodel)$coefficients[1,1]
     ratio_u <- summary(lmodel)$coefficients[1,2]
     r_sq <- round(summary(lmodel)$adj.r.squared,4)
+
+    string1 <- "The model is linear with no significant intercept."
+    string2 <- paste0("Quadratic term: p = ", quad_p_nice," > 0.05 (not significant)")
     string3 <- paste0("Slope: ", pretty_uncert(ratio_raw,ratio_u), " cm.")
-    string4 <- paste0("Adjusted R^2: ", r_sq)
-    strings <- paste(string1, string2, string3, string4, sep="\n")
-    return(c('lin0',strings))
+    string4 <- paste0("Intercept: p = ",p_val," ≥ 0.05 (not significant).")
+    string5 <- paste0("Adjusted R^2: ", r_sq)
+    strings <- paste(string1, string2, string3, string4, string5, sep="\n")
+    return(list('lin0',strings))
   }
 }
 
 make_plot <- function(data){
-  model <- make_model(data)
+  model <- make_model(data)[1]
 
   x_label <-bquote(V[def]/V[acc]~(dimensionless))
   y_label <- "Electron Deflection y (cm)"
@@ -177,26 +182,26 @@ make_plot <- function(data){
     xlab(x_label)+
     ylab(y_label) + labs(color=bquote(V[acc]~(V)))
 
-  if (model[1]=='lin0'){
+  if (model=='lin0'){
     my_plot <- my_plot + geom_smooth(
       data=data,
       method="lm",
       formula=y~0+x)
   }
-  else if (model[1]=='lin1'){
+  else if (model=='lin1'){
     my_plot <- my_plot+geom_smooth(
       data=data,
       method="lm",
       formula=y~1+x)
   }
-  else if (model[1]=='quad0'){
+  else if (model=='quad0'){
     my_plot <- my_plot+geom_smooth(
       data=data,
       method="lm",
       formula=y~0+x+I(x^2))
   }
 
-  else if (model[1]=='quad1'){
+  else if (model=='quad1'){
     my_plot <- my_plot+geom_smooth(
       data=data,
       method="lm",
@@ -294,7 +299,7 @@ server <- function(input, output) {
   model_type <- 'None'
 
       output$predSlope <- renderText({
-      values <- slope_func(input$plateLength,
+      values <- pred_slope(input$plateLength,
                            input$delta_plateLength,
                            input$screenDist,
                            input$delta_screenDist,
@@ -333,8 +338,8 @@ server <- function(input, output) {
                         .name_repair = "unique")
       names(data)<-c("Va", "Vd", "Vratio", "y")
       results <- make_model(data)
-      model_type <- results[1]
-      results[2]
+      model_type <- results[[1]]
+      results[[2]]
     })
 
     output$plot <- renderPlot({
@@ -355,7 +360,7 @@ server <- function(input, output) {
                         .name_repair = "unique")
       names(data)<-c("Va", "Vd", "Vratio", "y")
 
-      values <- slope_func(input$plateLength,
+      values <- pred_slope(input$plateLength,
                            input$delta_plateLength,
                            input$screenDist,
                            input$delta_screenDist,
@@ -371,7 +376,7 @@ server <- function(input, output) {
 
       plot <- make_plot(data2)
 
-      if (is.finite(slope_min)){
+      if (is.finite(slope_min) && is.finite(slope_max)){
         plot <- plot +
           geom_ribbon(data=data2, aes(ymin=y_min, ymax=y_max), alpha=0.05, colour="green", fill="green", show.legend=FALSE)
       }
@@ -379,11 +384,6 @@ server <- function(input, output) {
 
       plot
     })
-
-
-
-
-
 }
 
 # Run the application
