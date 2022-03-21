@@ -1,0 +1,390 @@
+#
+# This is a Shiny web application. You can run the application by clicking
+# the 'Run App' button above.
+#
+# Find out more about building applications with Shiny here:
+#
+#    http://shiny.rstudio.com/
+#
+
+library(shiny)
+library(tidyverse)
+library(ggplot2)
+library(readxl)
+
+
+pretty_uncert <- function(x, dx){
+  pos <- -floor(log10(dx))
+
+  u_digits <- dx * 10^pos
+
+  if (round(u_digits < 2)){
+    pos <- pos + 1
+  }
+
+  f_string <- paste0("%.", pos, "f")
+  u_str <- sprintf(f_string, round(dx*10^pos)/10^pos)
+  x_str <- sprintf(f_string, round(x*10^pos)/10^pos)
+
+  return(paste0(x_str, " ± ", u_str))
+
+
+}
+
+slope_func <- function(L, d_L, D, d_D, sep, d_sep){
+  if(L ==0.0 | d_L == 0.0 | D == 0.0 | d_D == 0.0 | sep == 0.0 | d_sep == 0.0)
+    return(c(Inf,Inf,Inf,Inf))
+
+  v <- L^2/(4.0*sep)+L*D/(2.0*sep)
+
+  u_L_sq <- ((L + D)/(2.0*sep) * d_L)^2
+  u_D_sq <- (L/(2.0*sep)*d_D)^2
+  u_sep_sq <- ((v/sep)*d_sep)^2
+
+  u <- sqrt(u_L_sq + u_D_sq + u_sep_sq)
+
+  out <- c(pretty_uncert(v,u), v-u, v+u)
+  return(out)
+}
+
+
+make_model <- function(data){
+  V_sq <- data$Vratio^2
+  data <- cbind(data, V_sq)
+
+
+  qmodel <- lm(y~Vratio+V_sq, data=data)
+  # Is quadratic term significant?
+  quad_p <- summary(qmodel)$coefficients[3,4]
+  if (quad_p < 0.05){
+    # Is intercept significant?
+    int_p <- summary(qmodel)$coefficients[1,4]
+    if(int_p < 0.05){
+      string1 <- "The model is quadratic with a significant intercept."
+
+      quad_val <- summary(qmodel)$coefficients[3,1]
+      quad_u <- summary(qmodel)$coefficients[3,2]
+      int_val <- summary(qmodel)$coefficients[1,1]
+      int_u <- summary(qmodel)$coefficients[1,2]
+      slope_val <- summary(qmodel)$coefficients[2,1]
+      slope_u <- summary(qmodel)$coefficients[2,2]
+
+      quad_p_pos <- -floor(log10(quad_p))+1
+      quad_p_nice <- round(quad_p*10^quad_p_pos)/10^quad_p_pos
+
+      int_p_pos <- -floor(log10(int_p)) + 1
+      int_p_nice <- round(int_p*10^int_p_pos)/10^int_p_pos
+
+      r_sq <- round(summary(qmodel)$adj.r.squared,4)
+
+      string2 <- paste0("Quadratic term: p = ", quad_p_nice, " < 0.05 (significant).  Value = ", pretty_uncert(quad_val, quad_u), " cm.")
+      string3 <- paste0("Linear term: value = ", pretty_uncert(slope_val,slope_u), " cm.")
+      string4 <- paste0("Intercept: p = ", int_p_nice, " < 0.05 (significant).  Value = ", pretty_uncert(int_val, int_u), "cm.")
+      string5 <- paste0("Adjusted R^2: ", r_sq)
+
+      strings <- paste(string1, string2, string3, string4, string5, sep="\n")
+      return(c("quad1",strings))
+    }
+    else{
+      # Quadratic, but no intercept.  Redo regression with intercept = 0.  *** This may change significance of quadratic term
+      # Only return if quadratic term is still significant.
+      qmodel <- lm(y~0+Vratio+V_sq, data=data)
+      quad_p <- summary(qmodel)$coefficients[2,4]
+      if (quad_p < 0.05){
+        string1 <- "The model is quadratic with zero intercept."
+
+        quad_val <- summary(qmodel)$coefficients[2,1]
+        quad_u <- summary(qmodel)$coefficients[2,2]
+
+        slope_val <- summary(qmodel)$coefficients[1,1]
+        slope_u <- summary(qmodel)$coefficients[1,2]
+
+        r_sq <- round(summary(qmodel)$adj.r.squared,4)
+        quad_p_pos <- -floor(log10(quad_p))+1
+        quad_p_nice <- round(quad_p*10^quad_p_pos)/10^quad_p_pos
+
+        int_p_pos <- -floor(log10(int_p)) + 1
+        int_p_nice <- round(int_p*10^int_p_pos)/10^int_p_pos
+
+        string2 <- paste0("Quadratic term: p = ", quad_p_nice, " < 0.05 (significant).  Value = ", pretty_uncert(quad_val, quad_u), " cm.")
+        string3 <- paste0("Linear term: value = ", pretty_uncert(slope_val, slope_u), " cm.")
+        string4 <- paste0("Intercept: p = ", int_p_nice, " > 0.05 (not significant).")
+        string5 <- paste0("Adjusted R^2: ", r_sq)
+
+        strings <- paste(string1, string2, string3, string4, string5, sep="\n")
+
+        return(c('quad0', strings))
+      }
+    # If we've reached here, it should be a linear fit.
+    }
+  }
+  lmodel <- lm(y~Vratio, data=data)
+
+  # Check if intercept is significant
+  p_int <- summary(lmodel)$coefficients[1,4]
+  if (p_int < 0.05){
+    string1 <- "The model is linear with a non-zero intercept."
+    constant_raw <- summary(lmodel)$coefficients[1,1]
+    constant_u <- summary(lmodel)$coefficients[1,2]
+    p_val <- summary(lmodel)$coefficients[1,4]
+    pos <- -floor(log10(p_val)) + 1
+    p_val <- round(p_val*10^pos)/10^pos
+    string2 <- paste0("Intercept: p = ",p_val," < 0.05 (significant), value=",pretty_uncert(constant_raw, constant_u), " cm.")
+
+    ratio_raw <- summary(lmodel)$coefficients[2,1]
+    ratio_u <- summary(lmodel)$coefficients[2,2]
+    r_sq <- round(summary(lmodel)$adj.r.squared,4)
+    string3 <- paste0("Slope: ", pretty_uncert(ratio_raw,ratio_u), " cm.")
+    string4 <- paste0("Adjusted R^2: ", r_sq)
+
+    strings <- paste (string1, string2, string3, string4, sep="\n")
+
+    return(c('lin1',strings))
+  }
+
+  else{
+    string1 <- "The model is linear with no significant intercept."
+
+    p_val <- summary(lmodel)$coefficients[1,4]
+    pos <- -floor(log10(p_val)) + 1
+    p_val <- round(p_val*10^pos)/10^pos
+
+    string2 <- paste0("Intercept: p = ",p_val," ≥ 0.05 (not significant).")
+
+    # Now redo the regression w/o intercept
+    lmodel <- lm(y~0+Vratio, data=data)
+    ratio_raw <- summary(lmodel)$coefficients[1,1]
+    ratio_u <- summary(lmodel)$coefficients[1,2]
+    r_sq <- round(summary(lmodel)$adj.r.squared,4)
+    string3 <- paste0("Slope: ", pretty_uncert(ratio_raw,ratio_u), " cm.")
+    string4 <- paste0("Adjusted R^2: ", r_sq)
+    strings <- paste(string1, string2, string3, string4, sep="\n")
+    return(c('lin0',strings))
+  }
+}
+
+make_plot <- function(data){
+  model <- make_model(data)
+
+  x_label <-bquote(V[def]/V[acc]~(dimensionless))
+  y_label <- "Electron Deflection y (cm)"
+
+  my_plot <- ggplot(data, aes(x=Vratio, y=y)) +
+    geom_point(aes(color=factor(Va))) +
+    theme_bw() +
+    geom_hline(yintercept = 0) +
+    geom_vline(xintercept = 0) +
+    xlab(x_label)+
+    ylab(y_label) + labs(color=bquote(V[acc]~(V)))
+
+  if (model[1]=='lin0'){
+    my_plot <- my_plot + geom_smooth(
+      data=data,
+      method="lm",
+      formula=y~0+x)
+  }
+  else if (model[1]=='lin1'){
+    my_plot <- my_plot+geom_smooth(
+      data=data,
+      method="lm",
+      formula=y~1+x)
+  }
+  else if (model[1]=='quad0'){
+    my_plot <- my_plot+geom_smooth(
+      data=data,
+      method="lm",
+      formula=y~0+x+I(x^2))
+  }
+
+  else if (model[1]=='quad1'){
+    my_plot <- my_plot+geom_smooth(
+      data=data,
+      method="lm",
+      formula=y~1+x+I(x^2))
+  }
+
+
+  return(my_plot)
+}
+
+# Define UI for application that draws a histogram
+ui <- fluidPage(
+
+    # Application title
+    titlePanel("Cathode Ray Tube analysis"),
+    sidebarLayout(
+        sidebarPanel(
+            numericInput(
+              'plateLength',
+              label="Plate Length L (cm)",
+              value=0,
+              min = 1E-2,
+              max = 3,
+              step = NA,
+              width = NULL
+            ),
+            numericInput(
+              'delta_plateLength',
+              label="Plate Length Uncertainty (cm)",
+              value=0,
+              min = 1E-2,
+              max = 3,
+              step = NA,
+              width = NULL
+            ),
+            numericInput(
+              'screenDist',
+              label="Distance D to screen (cm)",
+              value=0,
+              min = 1E-2,
+              max = 30,
+              step = NA,
+              width = NULL
+            ),
+            numericInput(
+              'delta_screenDist',
+              label="Distance D Uncertainty (cm)",
+              value=0,
+              min = 1E-2,
+              max = 30,
+              step = NA,
+              width = NULL
+            ),
+            numericInput(
+              'plateSep',
+              label="Separation d between the deflection plates (cm)",
+              value=0,
+              min = 1E-2,
+              max = 30,
+              step = NA,
+              width = NULL
+            ),
+            numericInput(
+              'delta_plateSep',
+              label="Separation d Uncertainty (cm)",
+              value=0,
+              min = 1E-2,
+              max = 30,
+              step = NA,
+              width = NULL
+            ),
+
+            textOutput("predSlope")
+        ),
+
+        # Show a plot of the generated distribution
+        mainPanel(
+          fileInput(
+            'data_file',
+            label="Upload your completed Excel file",
+            multiple = FALSE,
+            accept = '.xlsx',
+            width = NULL,
+            buttonLabel = "Browse...",
+            placeholder = "No file selected"
+          ),
+          verbatimTextOutput("LM"),
+          plotOutput("plot")
+        )
+    )
+)
+
+# Define server logic required to draw a histogram
+server <- function(input, output) {
+  model_type <- 'None'
+
+      output$predSlope <- renderText({
+      values <- slope_func(input$plateLength,
+                           input$delta_plateLength,
+                           input$screenDist,
+                           input$delta_screenDist,
+                           input$plateSep,
+                           input$delta_plateSep)
+
+
+      if (!is.finite(as.numeric(values[3]))){
+        string <- "Enter data above to compute predicted slope."
+      }
+      else if (is.finite(as.numeric(values[3]))){
+        string <- paste0("Predicted slope: ", values[1]," cm")
+      }
+      else {
+        string <- "Enter data above to compute predicted slope."
+      }
+      string
+    })
+
+    output$LM <- renderText({
+      file <- input$data_file
+      ext <- tools::file_ext(file$datapath)
+      validate(need(ext == "xlsx", "Please upload an Excel .xlsx file"))
+
+      data <- read_xlsx(file$datapath,
+                        sheet = NULL,
+                        range = 'A1:D25',
+                        col_names = TRUE,
+                        #col_types = numeric,
+                        na = "",
+                        trim_ws = TRUE,
+                        skip = 0,
+                        #n_max = Inf,
+                        #guess_max = min(1000, n_max),
+                        progress = FALSE,
+                        .name_repair = "unique")
+      names(data)<-c("Va", "Vd", "Vratio", "y")
+      results <- make_model(data)
+      model_type <- results[1]
+      results[2]
+    })
+
+    output$plot <- renderPlot({
+      file <- input$data_file
+      ext <- tools::file_ext(file$datapath)
+      validate(need(ext == "xlsx", "Please upload an Excel .xlsx file"))
+      data <- read_xlsx(file$datapath,
+                        sheet = NULL,
+                        range = 'A1:D25',
+                        col_names = TRUE,
+                        #col_types = numeric,
+                        na = "",
+                        trim_ws = TRUE,
+                        skip = 0,
+                        #n_max = Inf,
+                        #guess_max = min(1000, n_max),
+                        progress = FALSE,
+                        .name_repair = "unique")
+      names(data)<-c("Va", "Vd", "Vratio", "y")
+
+      values <- slope_func(input$plateLength,
+                           input$delta_plateLength,
+                           input$screenDist,
+                           input$delta_screenDist,
+                           input$plateSep,
+                           input$delta_plateSep)
+      slope_min <- as.numeric(values[2])
+      slope_max <- as.numeric(values[3])
+
+      y_min <- data$Vratio*slope_min
+      y_max <- data$Vratio*slope_max
+
+      data2 <- data.frame(cbind(data,y_min,y_max))
+
+      plot <- make_plot(data2)
+
+      if (is.finite(slope_min)){
+        plot <- plot +
+          geom_ribbon(data=data2, aes(ymin=y_min, ymax=y_max), alpha=0.05, colour="green", fill="green", show.legend=FALSE)
+      }
+
+
+      plot
+    })
+
+
+
+
+
+}
+
+# Run the application
+shinyApp(ui = ui, server = server)
