@@ -1,38 +1,24 @@
-# This shiny app is for helping with the analysis of the Cathode Ray Tube experiment (at least Dugdale's version).
-# The learning objectives of this activity are (1) interpret the statistical analysis of their position / voltage ratio
-# data and (2) to draw appropriate conlusions about the model being tested.
-
-# This app scaffolds:
-#   - handling uncertainties (error propagation)
-#   - performing repetitive regressions to test various hypotheses about the functional relationship
-#   - production of a submission-ready graph
-# in order to make time for interpreting the graph and drawing conclusions about the model being tested.
-#
-# Students can enter parameters of their CRT (and reasonable estimates of uncertainty) and obtain the slope predicted by the model
-# and the propagated uncertainty.
-#
-# Students can then upload their data in a standard Excel file.  Various regression models are then tested on these models to determine
-# (a) whether or not there is a significant quadratic dependence, (b) whether or not there is a significant intercept, (c) the value
-# and uncertainty of any
-
+# CRT_analysis
+# Michael Dugdale
 library(shiny)
 library(tidyverse)
 library(ggplot2)
 library(readxl)
 
 pretty_uncert <- function(x, dx){
-  # A small function for displaying a value and uncertainty to appropriate number of sig. figs.
-  pos <- -floor(log10(dx))
+  # A small function for displaying a value and uncertainty to appropriate number of sig. figs.  General rule, keep one uncertain digit
+  # unless leading digit is 1 in which case, retain two uncertain digtis.
 
+  pos <- -floor(log10(dx))
   u_digits <- dx * 10^pos
 
   if (round(u_digits < 2)){
     pos <- pos + 1
   }
-
   f_string <- paste0("%.", pos, "f")
-  u_str <- sprintf(f_string, round(dx*10^pos)/10^pos)
+
   x_str <- sprintf(f_string, round(x*10^pos)/10^pos)
+  u_str <- sprintf(f_string, round(dx*10^pos)/10^pos)
 
   return(paste0(x_str, " ± ", u_str))
 }
@@ -40,6 +26,16 @@ pretty_uncert <- function(x, dx){
 pred_slope <- function(L, d_L, D, d_D, sep, d_sep){
   # Function that finds the predicted slope (and uncertainty thereof) of the deflection vs. voltage ratio line based on
   # measurements/estimates of physical parameters of the CRT.
+
+  # Inputs:
+    # L, d_L : value and measurement uncertainty of plate length L.
+    # D, d_D : value and measurement uncertainty of plate-to-screen distance D.
+    # sep, d_sep: value and measurement uncertainty of plate spacing d.
+
+  # Returns a list containing:
+    # String expressing the predicted slope ± propagated uncertainty
+    # Minimum and maximum values of the predicted slope (slope - d_slope, slope + d_slope)
+    # If a caculation results in non-finite or NA, returns Inf for each element as a flag
 
   # Compute the value of the slope
   v <- L^2/(4.0*sep)+L*D/(2.0*sep)
@@ -66,10 +62,15 @@ pred_slope <- function(L, d_L, D, d_D, sep, d_sep){
 
 
 make_model <- function(data){
+  # Finds an appropriate fitting function (quadratic/linear, with/without intercept) best describing the deflction vs. voltage ratio data
+  # uploaded by a student.
+
+  # Start with full quadratic model
   V_sq <- data$Vratio^2
   data <- cbind(data, V_sq)
 
   qmodel <- lm(y~Vratio+V_sq, data=data)
+
   # Is quadratic term significant?
   quad_p <- summary(qmodel)$coefficients[3,4]
   quad_p_pos <- -floor(log10(quad_p))+1
@@ -79,34 +80,39 @@ make_model <- function(data){
     # Is intercept significant?
     int_p <- summary(qmodel)$coefficients[1,4]
     if(int_p < 0.05){
+
+      # In this case, both quadratic and intercept terms are significant and must be retained.  That is, we reject both the hypothesis that
+      # there is no quadratic term and the hypothesis that there is no intercept (i.e., hypotheses encoded by theoretical prediction.)
+
       quad_val <- summary(qmodel)$coefficients[3,1]
       quad_u <- summary(qmodel)$coefficients[3,2]
 
       int_val <- summary(qmodel)$coefficients[1,1]
       int_u <- summary(qmodel)$coefficients[1,2]
 
-      slope_val <- summary(qmodel)$coefficients[2,1]
-      slope_u <- summary(qmodel)$coefficients[2,2]
-
-
-
       int_p_pos <- -floor(log10(int_p)) + 1
       int_p_nice <- round(int_p*10^int_p_pos)/10^int_p_pos
 
+      slope_val <- summary(qmodel)$coefficients[2,1]
+      slope_u <- summary(qmodel)$coefficients[2,2]
+
       r_sq <- round(summary(qmodel)$adj.r.squared,4)
-      string1 <- "The model is quadratic with a significant intercept."
+
+      string1 <- "The model is quadratic with a significant (non-zero) intercept."
       string2 <- paste0("Quadratic term: p = ", quad_p_nice, " < 0.05 (significant).  Value = ", pretty_uncert(quad_val, quad_u), " cm.")
       string3 <- paste0("Linear term: value = ", pretty_uncert(slope_val,slope_u), " cm.")
       string4 <- paste0("Intercept: p = ", int_p_nice, " < 0.05 (significant).  Value = ", pretty_uncert(int_val, int_u), "cm.")
       string5 <- paste0("Adjusted R^2: ", r_sq)
 
       strings <- paste(string1, string2, string3, string4, string5, sep="\n")
-      return(list("quad1",strings))
+      return(list("quad1", strings))
     }
     else{
       # Quadratic, but no intercept.  Redo regression with intercept = 0.  *** This may change significance of quadratic term
       # Only return if quadratic term is still significant.
+
       qmodel <- lm(y~0+Vratio+V_sq, data=data)
+
       quad_p <- summary(qmodel)$coefficients[2,4]
       quad_p_pos <- -floor(log10(quad_p))+1
       quad_p_nice <- round(quad_p*10^quad_p_pos)/10^quad_p_pos
@@ -122,7 +128,7 @@ make_model <- function(data){
         quad_p_pos <- -floor(log10(quad_p))+1
         quad_p_nice <- round(quad_p*10^quad_p_pos)/10^quad_p_pos
 
-        string1 <- "The model is quadratic with zero intercept."
+        string1 <- "The model is quadratic with no significant intercept (i.e., intercept = 0)."
         string2 <- paste0("Quadratic term: p = ", quad_p_nice, " < 0.05 (significant).  Value = ", pretty_uncert(quad_val, quad_u), " cm.")
         string3 <- paste0("Linear term: value = ", pretty_uncert(slope_val, slope_u), " cm.")
         string4 <- paste0("Intercept: p = ", int_p_nice, " > 0.05 (not significant).")
@@ -132,9 +138,10 @@ make_model <- function(data){
 
         return(list('quad0', strings))
       }
-      # If we've reached here, it should be a linear fit.
     }
   }
+
+  # If we've reached here, it should be a linear fit.
   lmodel <- lm(y~Vratio, data=data)
 
   # Check if intercept is significant
@@ -143,13 +150,17 @@ make_model <- function(data){
 
     constant_raw <- summary(lmodel)$coefficients[1,1]
     constant_u <- summary(lmodel)$coefficients[1,2]
+
     p_val <- summary(lmodel)$coefficients[1,4]
     pos <- -floor(log10(p_val)) + 1
     p_val <- round(p_val*10^pos)/10^pos
+
     ratio_raw <- summary(lmodel)$coefficients[2,1]
     ratio_u <- summary(lmodel)$coefficients[2,2]
+
     r_sq <- round(summary(lmodel)$adj.r.squared,4)
-    string1 <- "The model is linear with a non-zero intercept."
+
+    string1 <- "The model is linear with a significant (i.e., non-zero) intercept."
     string2 <- paste0("Quadratic term: p = ", quad_p_nice," > 0.05 (not significant)")
     string3 <- paste0("Slope: ", pretty_uncert(ratio_raw,ratio_u), " cm.")
     string4 <- paste0("Intercept: p = ",p_val," < 0.05 (significant), value=",pretty_uncert(constant_raw, constant_u), " cm.")
@@ -157,7 +168,7 @@ make_model <- function(data){
 
     strings <- paste (string1, string2, string3, string4, string5, sep="\n")
 
-    return(list('lin1',strings))
+    return(list('lin1', strings))
   }
 
   else{
@@ -165,25 +176,28 @@ make_model <- function(data){
     pos <- -floor(log10(p_val)) + 1
     p_val <- round(p_val*10^pos)/10^pos
 
-
-
     # Now redo the regression w/o intercept
     lmodel <- lm(y~0+Vratio, data=data)
+
     ratio_raw <- summary(lmodel)$coefficients[1,1]
     ratio_u <- summary(lmodel)$coefficients[1,2]
+
     r_sq <- round(summary(lmodel)$adj.r.squared,4)
 
-    string1 <- "The model is linear with no significant intercept."
+    string1 <- "The model is linear with no significant intercept (i.e., intercept = 0)."
     string2 <- paste0("Quadratic term: p = ", quad_p_nice," > 0.05 (not significant)")
     string3 <- paste0("Slope: ", pretty_uncert(ratio_raw,ratio_u), " cm.")
     string4 <- paste0("Intercept: p = ",p_val," ≥ 0.05 (not significant).")
     string5 <- paste0("Adjusted R^2: ", r_sq)
     strings <- paste(string1, string2, string3, string4, string5, sep="\n")
-    return(list('lin0',strings))
+    return(list('lin0', strings))
   }
 }
 
 make_plot <- function(data){
+
+  # Makes a minimalist ggplot2 scatterplot, colour of points based on Vacc.
+
   model <- make_model(data)[1]
 
   x_label <-bquote(V[def]/V[acc]~(dimensionless))
@@ -191,7 +205,7 @@ make_plot <- function(data){
 
   my_plot <- ggplot(data, aes(x=Vratio, y=y)) +
     geom_point(aes(color=factor(Va))) +
-    theme_bw() +
+    theme_classic() +
     geom_hline(yintercept = 0) +
     geom_vline(xintercept = 0) +
     xlab(x_label)+
@@ -201,29 +215,39 @@ make_plot <- function(data){
     my_plot <- my_plot + geom_smooth(
       data=data,
       method="lm",
-      formula=y~0+x)
+      formula=y~0+x,
+      color='blue',
+      fill='blue',
+      alpha=0.2)
   }
   else if (model=='lin1'){
     my_plot <- my_plot+geom_smooth(
       data=data,
       method="lm",
-      formula=y~1+x)
+      formula=y~1+x,
+      color='blue',
+      fill='blue',
+      alpha=0.2)
   }
   else if (model=='quad0'){
     my_plot <- my_plot+geom_smooth(
       data=data,
       method="lm",
-      formula=y~0+x+I(x^2))
+      formula=y~0+x+I(x^2),
+      color='blue',
+      fill='blue',
+      alpha=0.2)
   }
 
   else if (model=='quad1'){
     my_plot <- my_plot+geom_smooth(
       data=data,
       method="lm",
-      formula=y~1+x+I(x^2))
+      formula=y~1+x+I(x^2),
+      color='blue',
+      fill='blue',
+      alpha=0.2)
   }
-
-
   return(my_plot)
 }
 
@@ -232,6 +256,7 @@ ui <- fluidPage(
 
   # Application title
   titlePanel("Cathode Ray Tube analysis"),
+
   sidebarLayout(
     sidebarPanel(
       numericInput(
@@ -239,19 +264,21 @@ ui <- fluidPage(
         label="Plate Length L (cm)",
         value=0,
         min = 1E-2,
-        max = 3,
+        max = 4,
         step = NA,
-        width = NULL
+        width = 200
       ),
+
       numericInput(
         'delta_plateLength',
         label="Plate Length Uncertainty (cm)",
         value=0,
         min = 1E-2,
-        max = 3,
+        max = 2,
         step = NA,
-        width = NULL
+        width = 200
       ),
+
       numericInput(
         'screenDist',
         label="Distance D to screen (cm)",
@@ -259,34 +286,37 @@ ui <- fluidPage(
         min = 1E-2,
         max = 30,
         step = NA,
-        width = NULL
+        width = 200
       ),
+
       numericInput(
         'delta_screenDist',
         label="Distance D Uncertainty (cm)",
         value=0,
         min = 1E-2,
-        max = 30,
+        max = 10,
         step = NA,
-        width = NULL
+        width = 200
       ),
+
       numericInput(
         'plateSep',
         label="Separation d between the deflection plates (cm)",
         value=0,
-        min = 1E-2,
-        max = 30,
+        min = 1E-3,
+        max = 2,
         step = NA,
-        width = NULL
+        width = 200
       ),
+
       numericInput(
         'delta_plateSep',
         label="Separation d Uncertainty (cm)",
         value=0,
-        min = 1E-2,
-        max = 30,
+        min = 1E-3,
+        max = 1,
         step = NA,
-        width = NULL
+        width = 200
       ),
 
       textOutput("predSlope")
@@ -381,6 +411,7 @@ server <- function(input, output) {
                          input$delta_screenDist,
                          input$plateSep,
                          input$delta_plateSep)
+
     slope_min <- as.numeric(values[2])
     slope_max <- as.numeric(values[3])
 
@@ -395,7 +426,6 @@ server <- function(input, output) {
       plot <- plot +
         geom_ribbon(data=data2, aes(ymin=y_min, ymax=y_max), alpha=0.05, colour="green", fill="green", show.legend=FALSE)
     }
-
 
     plot
   })
