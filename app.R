@@ -1,19 +1,27 @@
+# This shiny app is for helping with the analysis of the Cathode Ray Tube experiment (at least Dugdale's version).
+# The learning objectives of this activity are (1) interpret the statistical analysis of their position / voltage ratio
+# data and (2) to draw appropriate conlusions about the model being tested.
+
+# This app scaffolds:
+#   - handling uncertainties (error propagation)
+#   - performing repetitive regressions to test various hypotheses about the functional relationship
+#   - production of a submission-ready graph
+# in order to make time for interpreting the graph and drawing conclusions about the model being tested.
 #
-# This is a Shiny web application. You can run the application by clicking
-# the 'Run App' button above.
+# Students can enter parameters of their CRT (and reasonable estimates of uncertainty) and obtain the slope predicted by the model
+# and the propagated uncertainty.
 #
-# Find out more about building applications with Shiny here:
-#
-#    http://shiny.rstudio.com/
-#
+# Students can then upload their data in a standard Excel file.  Various regression models are then tested on these models to determine
+# (a) whether or not there is a significant quadratic dependence, (b) whether or not there is a significant intercept, (c) the value
+# and uncertainty of any
 
 library(shiny)
 library(tidyverse)
 library(ggplot2)
 library(readxl)
 
-
 pretty_uncert <- function(x, dx){
+  # A small function for displaying a value and uncertainty to appropriate number of sig. figs.
   pos <- -floor(log10(dx))
 
   u_digits <- dx * 10^pos
@@ -30,18 +38,25 @@ pretty_uncert <- function(x, dx){
 }
 
 pred_slope <- function(L, d_L, D, d_D, sep, d_sep){
+  # Function that finds the predicted slope (and uncertainty thereof) of the deflection vs. voltage ratio line based on
+  # measurements/estimates of physical parameters of the CRT.
 
+  # Compute the value of the slope
   v <- L^2/(4.0*sep)+L*D/(2.0*sep)
 
+  # Propagate uncertainties to find uncertainty of predicted slope.
   u_L_sq <- ((L + D)/(2.0*sep) * d_L)^2
   u_D_sq <- (L/(2.0*sep)*d_D)^2
   u_sep_sq <- ((v/sep)*d_sep)^2
 
   u <- sqrt(u_L_sq + u_D_sq + u_sep_sq)
 
+  # If finite, return the slope ± uncertainty, as well as min and max slopes.
   if (is.finite(v) && is.finite(u)){
     out <- list(pretty_uncert(v,u), v-u, v+u)
   }
+
+  # Otherwise, return 'Inf' (to be caught later by is.finite functions.)
 
   else{
     out <- list(Inf,Inf, Inf)
@@ -117,7 +132,7 @@ make_model <- function(data){
 
         return(list('quad0', strings))
       }
-    # If we've reached here, it should be a linear fit.
+      # If we've reached here, it should be a linear fit.
     }
   }
   lmodel <- lm(y~Vratio, data=data)
@@ -215,175 +230,175 @@ make_plot <- function(data){
 # Define UI for application that draws a histogram
 ui <- fluidPage(
 
-    # Application title
-    titlePanel("Cathode Ray Tube analysis"),
-    sidebarLayout(
-        sidebarPanel(
-            numericInput(
-              'plateLength',
-              label="Plate Length L (cm)",
-              value=0,
-              min = 1E-2,
-              max = 3,
-              step = NA,
-              width = NULL
-            ),
-            numericInput(
-              'delta_plateLength',
-              label="Plate Length Uncertainty (cm)",
-              value=0,
-              min = 1E-2,
-              max = 3,
-              step = NA,
-              width = NULL
-            ),
-            numericInput(
-              'screenDist',
-              label="Distance D to screen (cm)",
-              value=0,
-              min = 1E-2,
-              max = 30,
-              step = NA,
-              width = NULL
-            ),
-            numericInput(
-              'delta_screenDist',
-              label="Distance D Uncertainty (cm)",
-              value=0,
-              min = 1E-2,
-              max = 30,
-              step = NA,
-              width = NULL
-            ),
-            numericInput(
-              'plateSep',
-              label="Separation d between the deflection plates (cm)",
-              value=0,
-              min = 1E-2,
-              max = 30,
-              step = NA,
-              width = NULL
-            ),
-            numericInput(
-              'delta_plateSep',
-              label="Separation d Uncertainty (cm)",
-              value=0,
-              min = 1E-2,
-              max = 30,
-              step = NA,
-              width = NULL
-            ),
+  # Application title
+  titlePanel("Cathode Ray Tube analysis"),
+  sidebarLayout(
+    sidebarPanel(
+      numericInput(
+        'plateLength',
+        label="Plate Length L (cm)",
+        value=0,
+        min = 1E-2,
+        max = 3,
+        step = NA,
+        width = NULL
+      ),
+      numericInput(
+        'delta_plateLength',
+        label="Plate Length Uncertainty (cm)",
+        value=0,
+        min = 1E-2,
+        max = 3,
+        step = NA,
+        width = NULL
+      ),
+      numericInput(
+        'screenDist',
+        label="Distance D to screen (cm)",
+        value=0,
+        min = 1E-2,
+        max = 30,
+        step = NA,
+        width = NULL
+      ),
+      numericInput(
+        'delta_screenDist',
+        label="Distance D Uncertainty (cm)",
+        value=0,
+        min = 1E-2,
+        max = 30,
+        step = NA,
+        width = NULL
+      ),
+      numericInput(
+        'plateSep',
+        label="Separation d between the deflection plates (cm)",
+        value=0,
+        min = 1E-2,
+        max = 30,
+        step = NA,
+        width = NULL
+      ),
+      numericInput(
+        'delta_plateSep',
+        label="Separation d Uncertainty (cm)",
+        value=0,
+        min = 1E-2,
+        max = 30,
+        step = NA,
+        width = NULL
+      ),
 
-            textOutput("predSlope")
-        ),
+      textOutput("predSlope")
+    ),
 
-        # Show a plot of the generated distribution
-        mainPanel(
-          fileInput(
-            'data_file',
-            label="Upload your completed Excel file",
-            multiple = FALSE,
-            accept = '.xlsx',
-            width = NULL,
-            buttonLabel = "Browse...",
-            placeholder = "No file selected"
-          ),
-          verbatimTextOutput("LM"),
-          plotOutput("plot")
-        )
+    # Show a plot of the generated distribution
+    mainPanel(
+      fileInput(
+        'data_file',
+        label="Upload your completed Excel file",
+        multiple = FALSE,
+        accept = '.xlsx',
+        width = NULL,
+        buttonLabel = "Browse...",
+        placeholder = "No file selected"
+      ),
+      verbatimTextOutput("LM"),
+      plotOutput("plot")
     )
+  )
 )
 
 # Define server logic required to draw a histogram
 server <- function(input, output) {
   model_type <- 'None'
 
-      output$predSlope <- renderText({
-      values <- pred_slope(input$plateLength,
-                           input$delta_plateLength,
-                           input$screenDist,
-                           input$delta_screenDist,
-                           input$plateSep,
-                           input$delta_plateSep)
+  output$predSlope <- renderText({
+    values <- pred_slope(input$plateLength,
+                         input$delta_plateLength,
+                         input$screenDist,
+                         input$delta_screenDist,
+                         input$plateSep,
+                         input$delta_plateSep)
 
 
-      if (!is.finite(as.numeric(values[3]))){
-        string <- "Enter data above to compute predicted slope."
-      }
-      else if (is.finite(as.numeric(values[3]))){
-        string <- paste0("Predicted slope: ", values[1]," cm")
-      }
-      else {
-        string <- "Enter data above to compute predicted slope."
-      }
-      string
-    })
+    if (!is.finite(as.numeric(values[3]))){
+      string <- "Enter data above to compute predicted slope."
+    }
+    else if (is.finite(as.numeric(values[3]))){
+      string <- paste0("Predicted slope: ", values[1]," cm")
+    }
+    else {
+      string <- "Enter data above to compute predicted slope."
+    }
+    string
+  })
 
-    output$LM <- renderText({
-      file <- input$data_file
-      ext <- tools::file_ext(file$datapath)
-      validate(need(ext == "xlsx", "Please upload an Excel .xlsx file"))
+  output$LM <- renderText({
+    file <- input$data_file
+    ext <- tools::file_ext(file$datapath)
+    validate(need(ext == "xlsx", "Please upload an Excel .xlsx file"))
 
-      data <- read_xlsx(file$datapath,
-                        sheet = NULL,
-                        range = 'A1:D25',
-                        col_names = TRUE,
-                        #col_types = numeric,
-                        na = "",
-                        trim_ws = TRUE,
-                        skip = 0,
-                        #n_max = Inf,
-                        #guess_max = min(1000, n_max),
-                        progress = FALSE,
-                        .name_repair = "unique")
-      names(data)<-c("Va", "Vd", "Vratio", "y")
-      results <- make_model(data)
-      model_type <- results[[1]]
-      results[[2]]
-    })
+    data <- read_xlsx(file$datapath,
+                      sheet = NULL,
+                      range = 'A1:D200',
+                      col_names = TRUE,
+                      #col_types = numeric,
+                      na = "",
+                      trim_ws = TRUE,
+                      skip = 0,
+                      #n_max = Inf,
+                      #guess_max = min(1000, n_max),
+                      progress = FALSE,
+                      .name_repair = "unique")
+    names(data)<-c("Va", "Vd", "Vratio", "y")
+    results <- make_model(data)
+    model_type <- results[[1]]
+    results[[2]]
+  })
 
-    output$plot <- renderPlot({
-      file <- input$data_file
-      ext <- tools::file_ext(file$datapath)
-      validate(need(ext == "xlsx", "Please upload an Excel .xlsx file"))
-      data <- read_xlsx(file$datapath,
-                        sheet = NULL,
-                        range = 'A1:D25',
-                        col_names = TRUE,
-                        #col_types = numeric,
-                        na = "",
-                        trim_ws = TRUE,
-                        skip = 0,
-                        #n_max = Inf,
-                        #guess_max = min(1000, n_max),
-                        progress = FALSE,
-                        .name_repair = "unique")
-      names(data)<-c("Va", "Vd", "Vratio", "y")
+  output$plot <- renderPlot({
+    file <- input$data_file
+    ext <- tools::file_ext(file$datapath)
+    validate(need(ext == "xlsx", "Please upload an Excel .xlsx file"))
+    data <- read_xlsx(file$datapath,
+                      sheet = NULL,
+                      range = 'A1:D25',
+                      col_names = TRUE,
+                      #col_types = numeric,
+                      na = "",
+                      trim_ws = TRUE,
+                      skip = 0,
+                      #n_max = Inf,
+                      #guess_max = min(1000, n_max),
+                      progress = FALSE,
+                      .name_repair = "unique")
+    names(data)<-c("Va", "Vd", "Vratio", "y")
 
-      values <- pred_slope(input$plateLength,
-                           input$delta_plateLength,
-                           input$screenDist,
-                           input$delta_screenDist,
-                           input$plateSep,
-                           input$delta_plateSep)
-      slope_min <- as.numeric(values[2])
-      slope_max <- as.numeric(values[3])
+    values <- pred_slope(input$plateLength,
+                         input$delta_plateLength,
+                         input$screenDist,
+                         input$delta_screenDist,
+                         input$plateSep,
+                         input$delta_plateSep)
+    slope_min <- as.numeric(values[2])
+    slope_max <- as.numeric(values[3])
 
-      y_min <- data$Vratio*slope_min
-      y_max <- data$Vratio*slope_max
+    y_min <- data$Vratio*slope_min
+    y_max <- data$Vratio*slope_max
 
-      data2 <- data.frame(cbind(data,y_min,y_max))
+    data2 <- data.frame(cbind(data,y_min,y_max))
 
-      plot <- make_plot(data2)
+    plot <- make_plot(data2)
 
-      if (is.finite(slope_min) && is.finite(slope_max)){
-        plot <- plot +
-          geom_ribbon(data=data2, aes(ymin=y_min, ymax=y_max), alpha=0.05, colour="green", fill="green", show.legend=FALSE)
-      }
+    if (is.finite(slope_min) && is.finite(slope_max)){
+      plot <- plot +
+        geom_ribbon(data=data2, aes(ymin=y_min, ymax=y_max), alpha=0.05, colour="green", fill="green", show.legend=FALSE)
+    }
 
 
-      plot
-    })
+    plot
+  })
 }
 
 # Run the application
