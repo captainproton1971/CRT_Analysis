@@ -117,6 +117,9 @@ make_model <- function(data){
       quad_p_pos <- -floor(log10(quad_p))+1
       quad_p_nice <- round(quad_p*10^quad_p_pos)/10^quad_p_pos
 
+      int_p_pos <- -floor(log10(int_p)) + 1
+      int_p_nice <- round(int_p*10^int_p_pos)/10^int_p_pos
+
       if (quad_p < 0.05){
         quad_val <- summary(qmodel)$coefficients[2,1]
         quad_u <- summary(qmodel)$coefficients[2,2]
