@@ -329,7 +329,7 @@ ui <- fluidPage(
     mainPanel(
       downloadButton(
         'template_download',
-        label="Download template",
+        label="Download data file template",
         icon = shiny::icon("download")
       ),
 

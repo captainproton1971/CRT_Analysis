@@ -1,6 +1,8 @@
 # Dugdale's Cathode Ray Tube Analysis
 A shiny app for scaffolding analysis of CRT deflection vs. voltage ratio data.
 
+Click [here](https://captainproton.shinyapps.io/CRT_analysis/) to use the online working example.
+
 ## Purpose
 This app supports students in analyzing the deflection \(y\) vs. ratio \(\frac{V_\text{def}}{V_\text{acc}}\) of deflection potential \(V_\text{def}\) to accelerating potential \(V_\text{acc}\) for electrons in a cathode ray tube.  Theory predicts this relationship to be _proportional_ (i.e., linear with zero intercept), having slope \[y = \left(\frac{L^2}{4d}+\frac{LD}{2d}\right)\] where \(L\) is the length of the deflecting plates, \(d\) is the spacing between deflecting plates, and \(D\) is the distance from the deflecting plates to the screen.  Students are expected to derive this relationship.
 
