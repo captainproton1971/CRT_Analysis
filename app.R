@@ -327,6 +327,12 @@ ui <- fluidPage(
 
     # Show a plot of the generated distribution
     mainPanel(
+      downloadButton(
+        'template_download',
+        label="Download template",
+        icon = shiny::icon("download")
+      ),
+
       fileInput(
         'data_file',
         label="Upload your completed Excel file",
@@ -389,6 +395,13 @@ server <- function(input, output) {
     model_type <- results[[1]]
     results[[2]]
   })
+
+  output$template_download <- downloadHandler(
+    filename="CRT_data.xlsx",
+    content=function(file){
+      file.copy('www/CRT_data_template.xlsx', file)
+    }
+  )
 
   output$plot <- renderPlot({
     file <- input$data_file

@@ -27,7 +27,7 @@ From these, the app calculates the predicted slope and its propagated uncertaint
 When students upload their data (top of the main panel), the best-fit function is investigated automatically.
 
 The predicted relationship is of the form \(y=Bx\) where \(B\) is the predicted slope and \(x=\frac{V_\text{def}}{V_
-text{acc}}\).  We wish to test that the form of the function supports the prediction.  To that end, we investigate the model \(y=Ax^2 + Bx + C\), and test the hypotheses that \(A=0\) and \(B=0\) using regression.  Small (\(p<0.5\)) p-values for the regression coefficients \(A\) and \(B\) indicate that the corresponding hypotheses are unlikely.  Otherwise, they are not statistically significant and can be ignored.
+\text{acc}}\).  We wish to test that the form of the function supports the prediction.  To that end, we investigate the model \(y=Ax^2 + Bx + C\), and test the hypotheses that \(A=0\) and \(B=0\) using regression.  Small (\(p<0.5\)) p-values for the regression coefficients \(A\) and \(B\) indicate that the corresponding hypotheses are unlikely.  Otherwise, they are not statistically significant and can be ignored.
 
 First, the full quadratic form is tested.
 
