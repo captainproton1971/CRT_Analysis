@@ -8,14 +8,17 @@ This app supports students in analyzing the deflection \(y\) vs. ratio \(\frac{V
 
 ## Scaffolding
 The learning objectives I've assigned to this lab are:
-  * interpreting results of statistical tests as rejecting, or failing to reject, a null hypothesis.
-  * interpreting a graphical visualization of best-fit function vs. theoretical prediction involving uncertainties.
-  s (i.e., deciding whether the evidence supports the theory), not conducting statistical tests, propagating uncertainties, or generating a graph.
 
-To that end, this app
-  * computes the predicted slope (students derive this as part of their introduction) and propagates its uncertainties.
-  * performs regression of various flavours, reporting the form of the best-fit function
-  * produces a scatterplot of the data, with a best fit line and uncertainty ribbon and a ribbon for the predicted relationship.
+  * interpreting results of statistical tests as rejecting, or failing to reject, a null hypothesis.
+  * interpreting a graphical visualization of best-fit function vs. theoretical prediction involving uncertainties 
+  
+That is, the pedagogical purpose of this lab involves deciding whether or not the evidence supports the theory.  It is not about conducting the statistical tests, propagating the uncertainties, or generating the graph.
+
+To focus students' analysis on interpreting the results, this app:
+
+  * computes the predicted slope (students derive this as part of their introduction) and propagates its uncertainties,
+  * performs regression of various flavours, reporting the form of the best-fit function, and
+  * produces a scatterplot of the data, with a best fit line with uncertainty ribbon, and another ribbon indicating the range of the theoretical prediction.
   
 ## Details
 Some details of the logic behind the analysis.
@@ -28,8 +31,9 @@ From these, the app calculates the predicted slope and its propagated uncertaint
 ### Regression
 When students upload their data (top of the main panel), the best-fit function is investigated automatically.
 
-The predicted relationship is of the form \(y=Bx\) where \(B\) is the predicted slope and \(x=\frac{V_\text{def}}{V_
-\text{acc}}\).  We wish to test that the form of the function supports the prediction.  To that end, we investigate the model \(y=Ax^2 + Bx + C\), and test the hypotheses that \(A=0\) and \(B=0\) using regression.  Small (\(p<0.5\)) p-values for the regression coefficients \(A\) and \(B\) indicate that the corresponding hypotheses are unlikely.  Otherwise, they are not statistically significant and can be ignored.
+The predicted relationship is of the form \(y=Bx\) where \(B\) is the predicted slope and \(x=\frac{V_\text{def}}{V_\text{acc}}\).
+
+We wish to test that the form of the function supports the prediction.  To that end, we investigate the model \(y=Ax^2 + Bx + C\), and test the hypotheses that \(A=0\) and \(B=0\) using regression.  Small (\(p<0.5\)) p-values for the regression coefficients \(A\) and \(B\) indicate that the corresponding hypotheses are unlikely.  Otherwise, they are not statistically significant and can be ignored.
 
 First, the full quadratic form is tested.
 
