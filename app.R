@@ -333,6 +333,12 @@ ui <- fluidPage(
         icon = shiny::icon("download")
       ),
 
+      downloadButton(
+        'demo_download',
+        label="Download demo data file",
+        icon = shiny::icon("download")
+      ),
+
       fileInput(
         'data_file',
         label="Upload your completed Excel file",
@@ -400,6 +406,13 @@ server <- function(input, output) {
     filename="CRT_data.xlsx",
     content=function(file){
       file.copy('www/CRT_data_template.xlsx', file)
+    }
+  )
+
+  output$demo_download <- downloadHandler(
+    filename="CRT_demo_data.xlsx",
+    content = function(file){
+      file.copy('www/demo_data.xlsx', file)
     }
   )
 
